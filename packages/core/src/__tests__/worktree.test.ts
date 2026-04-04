@@ -26,12 +26,14 @@ const mockMkdirSync    = vi.mocked(mkdirSync)
 function resolveExecFile(stdout = '') {
   mockExecFileCb.mockImplementation((_cmd, _args, _opts, cb: any) => {
     cb(null, { stdout, stderr: '' })
+    return {} as any
   })
 }
 
 function rejectExecFile() {
   mockExecFileCb.mockImplementation((_cmd, _args, _opts, cb: any) => {
     cb(new Error('git error'))
+    return {} as any
   })
 }
 
@@ -207,8 +209,8 @@ describe('WorktreeManager', () => {
 
     it('returns failure with conflict file list', async () => {
       mockExecFileCb
-        .mockImplementationOnce((_c, _a, _o, cb: any) => cb(new Error('conflict')))
-        .mockImplementationOnce((_c, _a, _o, cb: any) => cb(null, { stdout: 'src/foo.ts\nsrc/bar.ts\n', stderr: '' }))
+        .mockImplementationOnce((_c, _a, _o, cb: any) => { cb(new Error('conflict')); return {} as any })
+        .mockImplementationOnce((_c, _a, _o, cb: any) => { cb(null, { stdout: 'src/foo.ts\nsrc/bar.ts\n', stderr: '' }); return {} as any })
 
       const result = await mgr.merge('qb/login')
 

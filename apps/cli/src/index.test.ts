@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { program, manager } from './index'
+import { program, manager } from './index.js'
 
 // Mock ora and chalk (already done in previous turn, but let's be explicit)
 vi.mock('ora', () => ({

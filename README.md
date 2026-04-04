@@ -1,19 +1,19 @@
 # 🐝 QueenBee
 
-> Orchestrate multiple Claude Code instances from a single command center.
+> Orchestrate multiple AI agents from a single command center.
 
-QueenBee is a developer tool that lets you spawn, manage, and monitor multiple [Claude Code](https://claude.ai/code) instances across different projects — all from one place. Whether you're context-switching between repos or running parallel AI-assisted workflows, QueenBee keeps everything under control.
+QueenBee is a developer tool that lets you spawn, manage, and monitor multiple AI agents (Claude, Gemini, OpenAI, etc.) across different projects — all from one place. Whether you're context-switching between repos or running parallel AI-assisted workflows, QueenBee keeps everything under control.
 
 ---
 
 ## Why QueenBee?
 
-Claude Code is powerful on its own. But when you're working across multiple projects simultaneously, switching contexts gets messy. QueenBee acts as the queen of the hive — directing worker bees (Claude Code instances) across your codebase, so you can:
+AI coding agents are powerful, but managing multiple simultaneous tasks across different repositories can be difficult. QueenBee acts as the queen of the hive — directing worker bees (AI agents) across your codebase, so you can:
 
-- Run **parallel Claude Code sessions** across different repos
-- Switch between projects without losing context
-- Get a **unified view** of all running instances via CLI or web UI
-- (Coming soon) Persistent **memory layer** that tracks intent and context across sessions
+- Run **parallel AI sessions** across different repos using git worktrees.
+- Switch between projects without losing context.
+- Get a **unified view** of all running agents via CLI or real-time Web UI.
+- Support for multiple AI ecosystems (Claude, Gemini, OpenAI, Open Code).
 
 ---
 
@@ -27,53 +27,40 @@ queenBee/
 │   ├── cli/          # qb — command-line interface
 │   └── web/          # Next.js dashboard
 └── packages/
-    └── core/         # Shared instance management logic
+    └── core/         # Shared agent management logic
 ```
 
 | Package | Name | Description |
 |---|---|---|
-| `packages/core` | `@queenbee/core` | `InstanceManager` class — spawns, tracks, and controls Claude Code processes |
-| `apps/cli` | `@queenbee/cli` | `qb` CLI binary — manage instances from your terminal |
-| `apps/web` | `@queenbee/web` | Web dashboard — visual overview of all instances |
+| `packages/core` | `@queenbee/core` | `AgentManager` class — spawns and controls AI processes |
+| `apps/cli` | `@queenbee/cli` | `qb` CLI binary — manage agents from your terminal |
+| `apps/web` | `@queenbee/web` | Web dashboard — visual overview with real-time logs |
 
 ---
 
 ## Getting Started
 
-**Prerequisites:** Node.js ≥ 20, pnpm ≥ 9, Claude Code installed (`claude` in PATH)
+**Prerequisites:** Node.js ≥ 20, pnpm ≥ 9
+
+### Installation (Global CLI)
+
+To install the QueenBee CLI (`qb`) globally for local testing:
 
 ```bash
-# Clone the repo
-git clone https://github.com/tewarig/queenBee.git
-cd queenBee
-
-# Install dependencies
-pnpm install
-
-# Build all packages
-pnpm build
+pnpm cli:install
 ```
 
-### CLI
+This will build the project and link the `qb` command globally.
+
+### Local Development
+
+Start a development environment where the core package and CLI are automatically rebuilt on changes:
 
 ```bash
-# Spawn a new instance for a project
-qb spawn /path/to/your/project --name my-project
-
-# Start it
-qb start <instance-id>
-
-# List all instances
-qb list
-
-# Stop an instance
-qb stop <instance-id>
-
-# Remove an instance
-qb remove <instance-id>
+pnpm cli:dev
 ```
 
-### Web UI
+Run the Web UI in development mode:
 
 ```bash
 pnpm --filter @queenbee/web dev
@@ -82,17 +69,46 @@ pnpm --filter @queenbee/web dev
 
 ---
 
-## Roadmap
+## Supported Runners
 
-- [x] Monorepo scaffold (pnpm workspaces + TypeScript)
-- [x] Core `InstanceManager` — spawn/start/stop/list Claude Code processes
-- [x] `qb` CLI with full instance lifecycle commands
-- [x] Next.js web UI shell
-- [ ] Web dashboard — live instance status, logs, controls
-- [ ] Persistent daemon — state survives CLI restarts
-- [ ] Memory layer — tracks what you're working on across instances
-- [ ] Multi-project context switching
-- [ ] Instance-to-instance communication
+QueenBee supports orchestrating agents across multiple AI ecosystems:
+
+- **Claude Code**: (Default) Uses the `claude` CLI.
+- **Gemini CLI**: Uses the `gemini` CLI.
+- **OpenAI Codex**: Uses the `openai` CLI (configured for `gpt-4o`).
+- **Open Code**: Uses the `opencode` CLI.
+
+---
+
+## CLI Usage
+
+```bash
+# Spawn a new agent for a task
+qb spawn "Fix navigation bug" --runner gemini
+
+# List all agents
+qb list
+
+# Start an agent and follow live logs
+qb start <id> --follow
+
+# Cancel a running agent
+qb cancel <id>
+
+# Remove an agent and its worktree
+qb remove <id>
+```
+
+---
+
+## Testing & Coverage
+
+We maintain high testing standards with over 90% workspace-wide coverage.
+
+```bash
+# Run tests and generate coverage reports for all packages
+pnpm --filter "@queenbee/*" test:coverage
+```
 
 ---
 
@@ -103,6 +119,7 @@ pnpm --filter @queenbee/web dev
 - **Package manager:** pnpm workspaces
 - **CLI:** Commander.js + Chalk + Ora
 - **Web:** Next.js 14 + React 18
+- **Testing:** Vitest
 
 ---
 
