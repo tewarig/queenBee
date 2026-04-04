@@ -34,6 +34,15 @@ describe('OpenAIRunner', () => {
     )
   })
 
+  it('uses a custom model if provided', () => {
+    runner.start({ task: 'test task', cwd: '/tmp', model: 'gpt-3.5-turbo' })
+    expect(spawn).toHaveBeenCalledWith(
+      'openai',
+      ['run', '--model', 'gpt-3.5-turbo', 'test task'],
+      expect.any(Object)
+    )
+  })
+
   it('emits log events from stdout', async () => {
     const logs: string[] = []
     runner.on('log', (msg) => logs.push(msg))

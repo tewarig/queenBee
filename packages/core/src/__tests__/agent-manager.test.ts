@@ -392,6 +392,14 @@ describe('AgentManager', () => {
     it('throws when id does not exist', async () => {
       await expect(mgr.merge('ghost')).rejects.toThrow('not found')
     })
+
+    it('throws when wtm is missing', async () => {
+      const agent = await makeAgent(mgr)
+      // Manually delete from internal map
+      mgr['worktreeManagers'].delete(agent.id)
+      
+      await expect(mgr.merge(agent.id)).rejects.toThrow('No worktree manager')
+    })
   })
 
   // ── remove ──────────────────────────────────────────────────────────────────

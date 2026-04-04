@@ -94,6 +94,12 @@ describe('CLI Commands', () => {
     expect(mockExit).toHaveBeenCalledWith(0)
   })
 
+  it('start command should NOT wait if follow is false', async () => {
+    vi.spyOn(manager, 'getInternal' as any).mockReturnValue({ id: '1', status: 'pending' })
+    await program.parseAsync(['node', 'qb', 'start', '1'])
+    expect(mockExit).toHaveBeenCalledWith(0)
+  })
+
   it('start command should handle errors', async () => {
     vi.spyOn(manager, 'getInternal' as any).mockReturnValue({
       id: '1234',
@@ -166,5 +172,41 @@ describe('CLI Commands', () => {
     eventHandler({ agentId: '1234', type: 'failed', data: { error: 'boom' } })
     expect(mockError).toHaveBeenCalledWith(expect.stringContaining('failed: boom'))
     expect(mockExit).toHaveBeenCalledWith(1)
+  })
+
+  it('run() should call program.parse when argv matches entry point', async () => {
+    const { run, createProgram } = await import('./index.js?run=' + Date.now())
+    const myProgram = createProgram()
+    const parseSpy = vi.spyOn(myProgram, 'parse').mockImplementation(() => myProgram)
+    
+    // We need to overwrite the 'program' that run() uses or just test if run() works
+    // Since run() uses the exported 'program', we'll just test the exported one
+    const index = await import('./index.js?run2=' + Date.now())
+    const globalParseSpy = vi.spyOn(index.program, 'parse').mockImplementation(() => index.program)
+    
+    index.run(['node', 'index.ts', 'ls'])
+    expect(globalParseSpy).toHaveBeenCalledWith(['node', 'index.ts', 'ls'])
+  })
+
+  it('run() should work with bin.js entry point', async () => {
+    const index = await import('./index.js?run4=' + Date.now())
+    const globalParseSpy = vi.spyOn(index.program, 'parse').mockImplementation(() => index.program)
+    index.run(['node', 'bin.js', 'ls'])
+    expect(globalParseSpy).toHaveBeenCalled()
+  })
+
+  it('run() should work with qb entry point', async () => {
+    const index = await import('./index.js?run5=' + Date.now())
+    const globalParseSpy = vi.spyOn(index.program, 'parse').mockImplementation(() => index.program)
+    index.run(['node', 'qb', 'ls'])
+    expect(globalParseSpy).toHaveBeenCalled()
+  })
+
+  it('run() should NOT call program.parse when argv does not match', async () => {
+    const index = await import('./index.js?run3=' + Date.now())
+    const globalParseSpy = vi.spyOn(index.program, 'parse').mockImplementation(() => index.program)
+    
+    index.run(['node', 'other.js', 'ls'])
+    expect(globalParseSpy).not.toHaveBeenCalled()
   })
 })
