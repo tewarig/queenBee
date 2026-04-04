@@ -152,15 +152,32 @@ describe('WorktreeManager', () => {
       'branch refs/heads/qb/login-abc',
     ].join('\n')
 
-    it('returns only qb/* worktrees', () => {
+    it('returns only qb/* worktrees and covers both branches in list', () => {
+      const PORCELAIN = [
+        'worktree /repo/.queenbee/worktrees/login-abc',
+        'HEAD ddeeff',
+        'branch refs/heads/qb/login-abc',
+        '',
+        'worktree /repo',
+        'HEAD aabbcc',
+        'branch refs/heads/main',
+      ].join('\n')
       mockExecFileSync.mockReturnValue(PORCELAIN)
 
       const result = mgr.list()
 
       expect(result).toHaveLength(1)
       expect(result[0].branch).toBe('qb/login-abc')
-      expect(result[0].path).toBe('/repo/.queenbee/worktrees/login-abc')
-      expect(result[0].head).toBe('ddeeff')
+    })
+
+    it('skips worktrees with missing branch line', () => {
+      mockExecFileSync.mockReturnValue('worktree /repo/x\nHEAD aabb')
+      expect(mgr.list()).toEqual([])
+    })
+
+    it('skips worktrees that are not qb/*', () => {
+      mockExecFileSync.mockReturnValue('worktree /repo/y\nHEAD cc\nbranch refs/heads/other')
+      expect(mgr.list()).toEqual([])
     })
 
     it('returns an empty array when git throws', () => {

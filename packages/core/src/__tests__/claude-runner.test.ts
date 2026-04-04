@@ -198,11 +198,23 @@ describe('ClaudeRunner', () => {
       expect(logs).toEqual([])
     })
 
-    it('skips assistant events with no content array', async () => {
+    it('skips non-text content blocks (tool_use etc.)', async () => {
       const { logs } = await runToCompletion({
         proc,
         stdoutLines: [
-          JSON.stringify({ type: 'assistant', message: {} }),
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1' }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs).toEqual([])
+    })
+
+    it('skips assistant text blocks with empty text property', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '' }] } }),
           JSON.stringify({ type: 'result', result: 'done' }),
         ],
       })

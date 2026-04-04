@@ -1,4 +1,5 @@
 export type AgentStatus = 'pending' | 'running' | 'completed' | 'standby' | 'failed' | 'cancelled'
+export type RunnerType = 'claude' | 'gemini' | 'openai' | 'opencode'
 
 export interface Agent {
   id: string
@@ -8,6 +9,7 @@ export interface Agent {
   branch: string
   worktreePath: string
   model: string
+  runner: RunnerType
   status: AgentStatus
   pid?: number
   createdAt: string
@@ -24,7 +26,8 @@ export interface CreateAgentOptions {
   repoPath: string
   baseBranch?: string       // default: "main"
   branchName?: string       // default: auto-derived from task
-  model?: string            // default: "sonnet"
+  model?: string            // default: "sonnet" for claude, "gemini-2.0-flash" for gemini
+  runner?: RunnerType       // default: "claude"
   maxBudgetUsd?: number
   appendSystemPrompt?: string
 }

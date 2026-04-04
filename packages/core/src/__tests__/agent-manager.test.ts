@@ -42,6 +42,27 @@ vi.mock('../claude-runner.js', () => ({
   }),
 }))
 
+vi.mock('../gemini-runner.js', () => ({
+  GeminiRunner: vi.fn().mockImplementation(() => {
+    mockRunner = new MockRunner()
+    return mockRunner
+  }),
+}))
+
+vi.mock('../openai-runner.js', () => ({
+  OpenAIRunner: vi.fn().mockImplementation(() => {
+    mockRunner = new MockRunner()
+    return mockRunner
+  }),
+}))
+
+vi.mock('../opencode-runner.js', () => ({
+  OpenCodeRunner: vi.fn().mockImplementation(() => {
+    mockRunner = new MockRunner()
+    return mockRunner
+  }),
+}))
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 const REPO = '/my/repo'
@@ -83,11 +104,17 @@ describe('AgentManager', () => {
       expect(agent.baseBranch).toBe('main')
     })
 
-    it('uses the provided baseBranch and model', async () => {
-      const agent = await makeAgent(mgr, { baseBranch: 'develop', model: 'opus' })
+    it('uses the provided baseBranch, model, and runner', async () => {
+      const agent = await makeAgent(mgr, { baseBranch: 'develop', model: 'gemini-pro', runner: 'gemini' })
 
       expect(agent.baseBranch).toBe('develop')
-      expect(agent.model).toBe('opus')
+      expect(agent.model).toBe('gemini-pro')
+      expect(agent.runner).toBe('gemini')
+    })
+
+    it('sets default model for gemini runner', async () => {
+      const agent = await makeAgent(mgr, { runner: 'gemini' })
+      expect(agent.model).toBe('gemini-2.0-flash')
     })
 
     it('auto-slugifies the task into a branch-friendly name', async () => {
@@ -208,6 +235,29 @@ describe('AgentManager', () => {
       expect(mockRunner.start).toHaveBeenCalledWith(
         expect.objectContaining({ task: TASK, cwd: agent.worktreePath, model: 'opus' })
       )
+    })
+
+    it('starts a gemini runner if specified', async () => {
+      const agent = await makeAgent(mgr, { runner: 'gemini' })
+      mgr.start(agent.id)
+
+      expect(mgr.get(agent.id).status).toBe('running')
+    })
+
+    it('starts an openai runner if specified', async () => {
+      const agent = await makeAgent(mgr, { runner: 'openai' })
+      mgr.start(agent.id)
+
+      expect(mgr.get(agent.id).status).toBe('running')
+      expect(mgr.get(agent.id).runner).toBe('openai')
+    })
+
+    it('starts an opencode runner if specified', async () => {
+      const agent = await makeAgent(mgr, { runner: 'opencode' })
+      mgr.start(agent.id)
+
+      expect(mgr.get(agent.id).status).toBe('running')
+      expect(mgr.get(agent.id).runner).toBe('opencode')
     })
 
     it('removes the runner from the map after done', async () => {

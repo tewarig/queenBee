@@ -2,6 +2,9 @@ import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { WorktreeManager } from './worktree.js'
 import { ClaudeRunner } from './claude-runner.js'
+import { GeminiRunner } from './gemini-runner.js'
+import { OpenAIRunner } from './openai-runner.js'
+import { OpenCodeRunner } from './opencode-runner.js'
 import type { Agent, AgentEvent, CreateAgentOptions } from './types.js'
 
 function slugify(task: string): string {
@@ -12,9 +15,15 @@ function slugify(task: string): string {
     .slice(0, 40)
 }
 
+interface Runner {
+  on(event: string | symbol, listener: (...args: any[]) => void): this
+  start(options: any): void
+  abort(): void
+}
+
 export class AgentManager extends EventEmitter {
   private agents = new Map<string, Agent>()
-  private runners = new Map<string, ClaudeRunner>()
+  private runners = new Map<string, Runner>()
   private worktreeManagers = new Map<string, WorktreeManager>()
 
   /**
@@ -31,6 +40,12 @@ export class AgentManager extends EventEmitter {
 
     this.worktreeManagers.set(id, wtm)
 
+    const runnerType = options.runner ?? 'claude'
+    let defaultModel = 'sonnet'
+    if (runnerType === 'gemini') defaultModel = 'gemini-2.0-flash'
+    if (runnerType === 'openai') defaultModel = 'gpt-4o'
+    if (runnerType === 'opencode') defaultModel = 'latest'
+
     const agent: Agent = {
       id,
       task: options.task,
@@ -38,7 +53,8 @@ export class AgentManager extends EventEmitter {
       baseBranch,
       branch,
       worktreePath,
-      model: options.model ?? 'sonnet',
+      model: options.model ?? defaultModel,
+      runner: runnerType,
       status: 'pending',
       createdAt: new Date().toISOString(),
     }
@@ -48,7 +64,7 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Start an agent — spawns Claude Code in the agent's worktree in the background.
+   * Start an agent — spawns the specified runner in the agent's worktree.
    */
   start(id: string): void {
     const agent = this.getInternal(id)
@@ -57,21 +73,27 @@ export class AgentManager extends EventEmitter {
       throw new Error(`Agent ${id} is already running`)
     }
 
-    const runner = new ClaudeRunner()
+    let runner: Runner
+    switch (agent.runner) {
+      case 'gemini': runner = new GeminiRunner(); break
+      case 'openai': runner = new OpenAIRunner(); break
+      case 'opencode': runner = new OpenCodeRunner(); break
+      default: runner = new ClaudeRunner(); break
+    }
     this.runners.set(id, runner)
 
     agent.status = 'running'
     agent.startedAt = new Date().toISOString()
     agent.pid = undefined
 
-    this.emitEvent(agent, 'started', { message: `Agent started on branch ${agent.branch}` })
+    this.emitEvent(agent, 'started', { message: `Agent started using ${agent.runner} on branch ${agent.branch}` })
 
     runner.on('log', (message: string) => {
       this.emitEvent(agent, 'log', { message })
     })
 
     runner.on('done', (result: { summary: string; costUsd?: number }) => {
-      agent.status = 'standby'    // Done but worktree preserved — ready for more
+      agent.status = 'standby'
       agent.completedAt = new Date().toISOString()
       agent.summary = result.summary
       agent.costUsd = result.costUsd
