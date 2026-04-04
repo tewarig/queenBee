@@ -8,7 +8,9 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "cli:install": "pnpm build && pnpm --filter @queenbee/cli exec pnpm link --global",
+    "cli:dev": "pnpm --parallel --filter @queenbee/core --filter @queenbee/cli dev"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

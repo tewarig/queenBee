@@ -117,7 +117,7 @@ describe('ClaudeRunner', () => {
 
     it('appends --max-budget-usd when provided', () => {
       new ClaudeRunner().start({ task: 'task', cwd: '/proj', maxBudgetUsd: 2 })
-      const args: string[] = mockSpawn.mock.calls[0][1]
+      const args = mockSpawn.mock.calls[0][1] as string[]
 
       expect(args).toContain('--max-budget-usd')
       expect(args).toContain('2')
@@ -125,14 +125,14 @@ describe('ClaudeRunner', () => {
 
     it('does not add --max-budget-usd when not provided', () => {
       new ClaudeRunner().start({ task: 'task', cwd: '/proj' })
-      const args: string[] = mockSpawn.mock.calls[0][1]
+      const args = mockSpawn.mock.calls[0][1] as string[]
 
       expect(args).not.toContain('--max-budget-usd')
     })
 
     it('appends --append-system-prompt when provided', () => {
       new ClaudeRunner().start({ task: 'task', cwd: '/proj', appendSystemPrompt: 'Be concise.' })
-      const args: string[] = mockSpawn.mock.calls[0][1]
+      const args = mockSpawn.mock.calls[0][1] as string[]
 
       expect(args).toContain('--append-system-prompt')
       expect(args).toContain('Be concise.')
@@ -140,21 +140,21 @@ describe('ClaudeRunner', () => {
 
     it('does not add --append-system-prompt when not provided', () => {
       new ClaudeRunner().start({ task: 'task', cwd: '/proj' })
-      const args: string[] = mockSpawn.mock.calls[0][1]
+      const args = mockSpawn.mock.calls[0][1] as string[]
 
       expect(args).not.toContain('--append-system-prompt')
     })
 
     it('uses the given model', () => {
       new ClaudeRunner().start({ task: 'task', cwd: '/proj', model: 'opus' })
-      const args: string[] = mockSpawn.mock.calls[0][1]
+      const args = mockSpawn.mock.calls[0][1] as string[]
 
       expect(args).toContain('opus')
     })
 
     it('puts the task as the final argument', () => {
       new ClaudeRunner().start({ task: 'build login', cwd: '/proj' })
-      const args: string[] = mockSpawn.mock.calls[0][1]
+      const args = mockSpawn.mock.calls[0][1] as string[]
 
       expect(args[args.length - 1]).toBe('build login')
     })
