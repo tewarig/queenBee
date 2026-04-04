@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "CLI for managing Claude Code instances",
   "bin": {
-    "qb": "./dist/index.js"
+    "qb": "./dist/bin.js"
   },
   "type": "module",
   "scripts": {

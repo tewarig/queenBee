@@ -79,4 +79,15 @@ describe('OpenCodeRunner', () => {
     runner.abort()
     expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM')
   })
+
+  it('emits done when process exits with 0', () => {
+    const donePromise = new Promise((resolve) => runner.on('done', resolve))
+    runner.start({ task: 'task', cwd: '.' })
+    mockProcess.emit('close', 0)
+
+    return expect(donePromise).resolves.toEqual({
+      summary: 'Task completed by Open Code',
+      exitCode: 0,
+    })
+  })
 })
