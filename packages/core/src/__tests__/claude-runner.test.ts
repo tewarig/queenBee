@@ -110,7 +110,7 @@ describe('ClaudeRunner', () => {
 
       expect(mockSpawn).toHaveBeenCalledWith(
         'claude',
-        expect.arrayContaining(['--print', '--output-format', 'stream-json', '--model', 'sonnet']),
+        expect.arrayContaining(['--print', '--verbose', '--output-format', 'stream-json', '--model', 'sonnet']),
         expect.objectContaining({ cwd: '/proj' })
       )
     })
