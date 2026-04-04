@@ -1,4 +1,4 @@
-export type AgentStatus = 'pending' | 'running' | 'completed' | 'standby' | 'failed' | 'cancelled'
+export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 export type RunnerType = 'claude' | 'gemini' | 'openai' | 'opencode'
 
 export interface Agent {

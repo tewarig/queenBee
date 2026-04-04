@@ -47,7 +47,7 @@ export function useAgents() {
 
           if (event.type === 'started') agent.status = 'running'
           if (event.type === 'completed') {
-            agent.status = 'standby'
+            agent.status = 'completed'
             agent.summary = event.data.summary
           }
           if (event.type === 'failed') {

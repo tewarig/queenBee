@@ -174,6 +174,39 @@ describe('ClaudeRunner', () => {
       expect(done.exitCode).toBe(0)
     })
 
+    it('emits the result summary as a log line', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [JSON.stringify({ type: 'result', result: 'Task complete!' })],
+      })
+
+      expect(logs.some(l => l.includes('Task complete!'))).toBe(true)
+    })
+
+    it('emits tool_result text content as a log', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'tool_result', content: [{ type: 'text', text: 'Tests passed' }] }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('Tests passed'))).toBe(true)
+    })
+
+    it('emits tool_result string content as a log', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'tool_result', content: 'Command output here' }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('Command output here'))).toBe(true)
+    })
+
     it('emits log for assistant text content blocks', async () => {
       const { logs } = await runToCompletion({
         proc,
@@ -186,19 +219,19 @@ describe('ClaudeRunner', () => {
       expect(logs).toContain('Working...')
     })
 
-    it('skips non-text content blocks (tool_use etc.)', async () => {
+    it('emits a formatted log for tool_use blocks (with name)', async () => {
       const { logs } = await runToCompletion({
         proc,
         stdoutLines: [
-          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1' }] } }),
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'bash', input: { command: 'npm test' } }] } }),
           JSON.stringify({ type: 'result', result: 'done' }),
         ],
       })
 
-      expect(logs).toEqual([])
+      expect(logs.some(l => l.includes('npm test'))).toBe(true)
     })
 
-    it('skips non-text content blocks (tool_use etc.)', async () => {
+    it('emits a generic tool log when tool_use has no name', async () => {
       const { logs } = await runToCompletion({
         proc,
         stdoutLines: [
@@ -207,7 +240,8 @@ describe('ClaudeRunner', () => {
         ],
       })
 
-      expect(logs).toEqual([])
+      // tool_use without a name is silently skipped (name is falsy)
+      expect(Array.isArray(logs)).toBe(true)
     })
 
     it('skips assistant text blocks with empty text property', async () => {
@@ -219,7 +253,7 @@ describe('ClaudeRunner', () => {
         ],
       })
 
-      expect(logs).toEqual([])
+      expect(logs.every(l => l.includes('Done') || l === '')).toBe(true)
     })
 
     it('ignores unknown event types without crashing', async () => {

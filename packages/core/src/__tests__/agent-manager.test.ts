@@ -189,7 +189,7 @@ describe('AgentManager', () => {
       expect(logEvent?.data.message).toBe('hello from claude')
     })
 
-    it('transitions to standby and emits completed when runner finishes', async () => {
+    it('transitions to completed and emits completed when runner finishes', async () => {
       const agent = await makeAgent(mgr)
       const events: AgentEvent[] = []
       mgr.on('event', (e: AgentEvent) => events.push(e))
@@ -198,7 +198,7 @@ describe('AgentManager', () => {
       mockRunner.emit('done', { summary: 'Login page built!', costUsd: 0.03 })
 
       const updated = mgr.get(agent.id)
-      expect(updated.status).toBe('standby')
+      expect(updated.status).toBe('completed')
       expect(updated.summary).toBe('Login page built!')
       expect(updated.costUsd).toBe(0.03)
       expect(events.find(e => e.type === 'completed')?.data.summary).toBe('Login page built!')
@@ -265,7 +265,7 @@ describe('AgentManager', () => {
       mgr.start(agent.id)
       mockRunner.emit('done', { summary: 'ok' })
 
-      // After done, agent is in standby — calling start again should work (new runner)
+      // After done, agent is in completed — calling start again should work (new runner)
       mgr.start(agent.id)
       expect(mockRunner.start).toHaveBeenCalledTimes(1) // new runner, fresh call count
     })
@@ -283,10 +283,10 @@ describe('AgentManager', () => {
   // ── reassign ────────────────────────────────────────────────────────────────
 
   describe('reassign()', () => {
-    it('updates the task and restarts a standby agent', async () => {
+    it('updates the task and restarts a completed agent', async () => {
       const agent = await makeAgent(mgr)
       mgr.start(agent.id)
-      mockRunner.emit('done', { summary: 'done' }) // → standby
+      mockRunner.emit('done', { summary: 'done' }) // → completed
 
       mgr.reassign(agent.id, 'New task')
 

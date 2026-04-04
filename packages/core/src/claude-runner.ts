@@ -47,6 +47,7 @@ export class ClaudeRunner extends EventEmitter {
     const args = [
       '--print',
       '--verbose',
+      '--dangerously-skip-permissions',
       '--output-format', 'stream-json',
       '--model', options.model ?? 'sonnet',
     ]

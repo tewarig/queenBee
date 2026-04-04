@@ -93,7 +93,7 @@ export class AgentManager extends EventEmitter {
     })
 
     runner.on('done', (result: { summary: string; costUsd?: number }) => {
-      agent.status = 'standby'
+      agent.status = 'completed'
       agent.completedAt = new Date().toISOString()
       agent.summary = result.summary
       agent.costUsd = result.costUsd
@@ -120,7 +120,7 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Assign a new task to a standby agent and restart it.
+   * Assign a new task to a completed agent and restart it.
    */
   reassign(id: string, newTask: string): void {
     const agent = this.getInternal(id)

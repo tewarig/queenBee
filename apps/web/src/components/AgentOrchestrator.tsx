@@ -198,7 +198,6 @@ const STATUS_COLORS: Record<string, string> = {
   pending:   '#6b7280',
   running:   '#3b82f6',
   completed: '#10b981',
-  standby:   '#10b981',
   failed:    '#ef4444',
   cancelled: '#f59e0b',
 }
@@ -248,7 +247,7 @@ function AgentCard({ agent, logs, onStart, onCancel }: {
           {agent.status === 'running' && (
             <button onClick={onCancel} className="btn-small btn-cancel">Cancel</button>
           )}
-          {(agent.status === 'standby' || agent.status === 'failed') && (
+          {(agent.status === 'completed' || agent.status === 'failed') && (
             <button onClick={onStart} className="btn-small btn-start">Rerun</button>
           )}
         </div>

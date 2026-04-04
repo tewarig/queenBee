@@ -139,9 +139,9 @@ describe('AgentOrchestrator', () => {
     })
   })
 
-  it('handles rerun for standby agent', () => {
+  it('handles rerun for completed agent', () => {
     ;(useAgents as any).mockReturnValue({
-      agents: [{ ...mockAgents[0], status: 'standby' }],
+      agents: [{ ...mockAgents[0], status: 'completed' }],
       logs: {},
       loading: false,
       startAgent: mockStartAgent,
@@ -155,7 +155,7 @@ describe('AgentOrchestrator', () => {
   it('displays summary and error', () => {
     ;(useAgents as any).mockReturnValue({
       agents: [
-        { ...mockAgents[0], status: 'standby', summary: 'all good' },
+        { ...mockAgents[0], status: 'completed', summary: 'all good' },
         { ...mockAgents[1], status: 'failed', error: 'boom' },
       ],
       logs: {},

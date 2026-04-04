@@ -116,7 +116,7 @@ describe('useAgents', () => {
     })
 
     await waitFor(() => {
-      expect(result.current.agents[0].status).toBe('standby')
+      expect(result.current.agents[0].status).toBe('completed')
       expect(result.current.agents[0].summary).toBe('finished')
     })
 
