@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAgents } from '@/hooks/use-agents'
 import type { Agent } from '@queenbee/core'
 
@@ -194,36 +194,53 @@ export function AgentOrchestrator() {
   )
 }
 
-function AgentCard({ agent, logs, onStart, onCancel }: { agent: Agent, logs: string[], onStart: () => void, onCancel: () => void }) {
-  const [showLogs, setShowLogs] = useState(false)
-  const statusColors = {
-    pending: '#666',
-    running: '#0070f3',
-    completed: '#10b981',
-    standby: '#10b981',
-    failed: '#ef4444',
-    cancelled: '#f59e0b',
-  }
+const STATUS_COLORS: Record<string, string> = {
+  pending:   '#6b7280',
+  running:   '#3b82f6',
+  completed: '#10b981',
+  standby:   '#10b981',
+  failed:    '#ef4444',
+  cancelled: '#f59e0b',
+}
 
-  const statusColor = statusColors[agent.status] || '#666'
+function AgentCard({ agent, logs, onStart, onCancel }: {
+  agent: Agent
+  logs: string[]
+  onStart: () => void
+  onCancel: () => void
+}) {
+  const [showLogs, setShowLogs] = useState(false)
+  const logsEndRef = useRef<HTMLDivElement>(null)
+  const statusColor = STATUS_COLORS[agent.status] ?? '#6b7280'
+
+  // Auto-scroll to bottom whenever new logs arrive (only if panel is visible)
+  useEffect(() => {
+    if (showLogs) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [logs, showLogs])
+
+  // Auto-open log panel when agent starts running
+  useEffect(() => {
+    if (agent.status === 'running') setShowLogs(true)
+  }, [agent.status])
 
   return (
     <div className="agent-card">
       <div className="agent-header">
-        <div>
-          <span className="status-badge" style={{ backgroundColor: statusColor }}>
-            {agent.status}
-          </span>
+        <div className="agent-header-left">
+          <span className="status-dot" style={{ background: statusColor }} />
+          <span className="status-text" style={{ color: statusColor }}>{agent.status}</span>
           <span className="agent-id">{agent.id.slice(0, 8)}</span>
           <span className="runner-badge">{agent.runner}</span>
         </div>
         <div className="actions">
-          <button 
-            onClick={() => setShowLogs(!showLogs)} 
+          <button
+            onClick={() => setShowLogs(v => !v)}
             className="btn-small btn-secondary"
-            style={{ marginRight: '0.5rem' }}
           >
             {showLogs ? 'Hide Logs' : 'Show Logs'}
+            {logs.length > 0 && <span className="log-count">{logs.length}</span>}
           </button>
           {agent.status === 'pending' && (
             <button onClick={onStart} className="btn-small btn-start">Start</button>
@@ -231,33 +248,45 @@ function AgentCard({ agent, logs, onStart, onCancel }: { agent: Agent, logs: str
           {agent.status === 'running' && (
             <button onClick={onCancel} className="btn-small btn-cancel">Cancel</button>
           )}
-          {agent.status === 'standby' && (
+          {(agent.status === 'standby' || agent.status === 'failed') && (
             <button onClick={onStart} className="btn-small btn-start">Rerun</button>
           )}
         </div>
       </div>
+
       <div className="agent-body">
-        <h3 className="task-title">{agent.task}</h3>
+        <p className="task-title">{agent.task}</p>
         <div className="meta">
           <span>Branch: <code>{agent.branch}</code></span>
           <span>Model: <code>{agent.model}</code></span>
-          {agent.summary && (
-            <div className="summary">
-              <strong>Summary:</strong> {agent.summary}
-            </div>
-          )}
-          {agent.error && (
-            <div className="error">
-              <strong>Error:</strong> {agent.error}
-            </div>
-          )}
         </div>
+
+        {agent.summary && (
+          <div className="summary">
+            <strong>Summary:</strong> {agent.summary}
+          </div>
+        )}
+        {agent.error && (
+          <div className="error-box">
+            <strong>Error:</strong> {agent.error}
+          </div>
+        )}
 
         {showLogs && (
           <div className="logs-container">
-            <h4>Live Logs</h4>
+            <div className="logs-header">
+              <span>Live Logs</span>
+              {agent.status === 'running' && (
+                <span className="live-badge">● LIVE</span>
+              )}
+            </div>
             <pre className="logs">
-              {logs.length > 0 ? logs.join('\n') : 'No logs yet...'}
+              {logs.length > 0
+                ? logs.join('')
+                : agent.status === 'running'
+                  ? 'Waiting for output...'
+                  : 'No logs.'}
+              <div ref={logsEndRef} />
             </pre>
           </div>
         )}
@@ -265,113 +294,149 @@ function AgentCard({ agent, logs, onStart, onCancel }: { agent: Agent, logs: str
 
       <style jsx>{`
         .agent-card {
-          border: 1px solid #ddd;
-          border-radius: 8px;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
           padding: 1.25rem;
           background: white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }
         .agent-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 1rem;
+          margin-bottom: 0.75rem;
         }
-        .status-badge {
-          display: inline-block;
-          padding: 0.25rem 0.5rem;
-          border-radius: 12px;
+        .agent-header-left {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .status-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+        .status-text {
           font-size: 0.75rem;
-          font-weight: bold;
-          color: white;
+          font-weight: 700;
           text-transform: uppercase;
-          margin-right: 0.75rem;
+          letter-spacing: 0.05em;
         }
         .runner-badge {
-          background: #eee;
-          padding: 0.2rem 0.5rem;
+          background: #f3f4f6;
+          padding: 0.15rem 0.5rem;
           border-radius: 4px;
-          font-size: 0.75rem;
-          color: #666;
+          font-size: 0.7rem;
+          color: #6b7280;
           font-family: monospace;
-          margin-left: 0.5rem;
         }
         .agent-id {
-          font-size: 0.875rem;
-          color: #888;
+          font-size: 0.8rem;
+          color: #9ca3af;
           font-family: monospace;
         }
+        .actions {
+          display: flex;
+          gap: 0.4rem;
+          align-items: center;
+        }
         .task-title {
-          margin: 0 0 0.75rem 0;
-          font-size: 1.1rem;
+          margin: 0 0 0.5rem 0;
+          font-size: 0.95rem;
+          font-weight: 500;
+          color: #111;
         }
         .meta {
-          font-size: 0.875rem;
-          color: #444;
+          font-size: 0.8rem;
+          color: #6b7280;
           display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
+          gap: 1rem;
         }
         .meta code {
-          background: #f0f0f0;
+          background: #f3f4f6;
           padding: 0.1rem 0.3rem;
           border-radius: 3px;
+          font-size: 0.75rem;
         }
         .summary {
           margin-top: 0.75rem;
           padding: 0.75rem;
           background: #f0fdf4;
-          border-radius: 4px;
-          border-left: 4px solid #10b981;
+          border-radius: 6px;
+          border-left: 3px solid #10b981;
+          font-size: 0.875rem;
         }
-        .error {
+        .error-box {
           margin-top: 0.75rem;
           padding: 0.75rem;
           background: #fef2f2;
-          border-radius: 4px;
-          border-left: 4px solid #ef4444;
+          border-radius: 6px;
+          border-left: 3px solid #ef4444;
+          font-size: 0.875rem;
+          color: #dc2626;
         }
         .logs-container {
           margin-top: 1rem;
-          border-top: 1px solid #eee;
-          padding-top: 1rem;
+          border-top: 1px solid #f3f4f6;
+          padding-top: 0.75rem;
         }
-        .logs-container h4 {
-          margin: 0 0 0.5rem 0;
-          font-size: 0.9rem;
-          color: #666;
+        .logs-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.4rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #6b7280;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .live-badge {
+          color: #ef4444;
+          font-size: 0.7rem;
+          font-weight: 700;
+          animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
         }
         .logs {
-          background: #222;
-          color: #eee;
-          padding: 1rem;
-          border-radius: 4px;
-          font-size: 0.75rem;
-          max-height: 200px;
+          background: #0d1117;
+          color: #e6edf3;
+          padding: 0.875rem 1rem;
+          border-radius: 6px;
+          font-size: 0.72rem;
+          line-height: 1.6;
+          max-height: 340px;
           overflow-y: auto;
           white-space: pre-wrap;
-          word-break: break-all;
+          word-break: break-word;
+          font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+          margin: 0;
         }
         .btn-small {
-          padding: 0.4rem 0.8rem;
-          border-radius: 4px;
+          padding: 0.35rem 0.75rem;
+          border-radius: 5px;
           border: none;
           cursor: pointer;
-          font-size: 0.875rem;
+          font-size: 0.8rem;
           font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
         }
-        .btn-start {
-          background: #10b981;
-          color: white;
+        .log-count {
+          background: #374151;
+          color: #d1d5db;
+          border-radius: 10px;
+          padding: 0.1rem 0.4rem;
+          font-size: 0.65rem;
         }
-        .btn-cancel {
-          background: #ef4444;
-          color: white;
-        }
-        .btn-secondary {
-          background: #eee;
-          color: #333;
-        }
+        .btn-start { background: #10b981; color: white; }
+        .btn-cancel { background: #ef4444; color: white; }
+        .btn-secondary { background: #f3f4f6; color: #374151; }
       `}</style>
     </div>
   )

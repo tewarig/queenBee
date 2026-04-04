@@ -17,14 +17,23 @@ export interface RunResult {
 }
 
 // Shape of events emitted by `claude --output-format stream-json`
+interface ContentBlock {
+  type: string
+  text?: string
+  name?: string        // tool name for tool_use blocks
+  input?: unknown      // tool input for tool_use blocks
+}
+
 interface ClaudeStreamEvent {
   type: string
   subtype?: string
   result?: string
   total_cost_usd?: number
   message?: {
-    content?: Array<{ type: string; text?: string }>
+    content?: ContentBlock[]
   }
+  tool_use_id?: string
+  content?: ContentBlock[] | string  // tool_result content
 }
 
 export class ClaudeRunner extends EventEmitter {
@@ -97,18 +106,62 @@ export class ClaudeRunner extends EventEmitter {
 
   private handleStreamEvent(event: ClaudeStreamEvent, result: RunResult): void {
     if (event.type === 'result') {
-      // Final result event — extract summary and cost
       result.summary = event.result ?? ''
       result.costUsd = event.total_cost_usd
+      // Emit the final summary as a log line too
+      if (event.result) this.emit('log', `\n✅ Done: ${event.result}`)
       return
     }
 
     if (event.type === 'assistant' && event.message?.content) {
       for (const block of event.message.content) {
         if (block.type === 'text' && block.text) {
+          // Claude's written response — stream it directly
           this.emit('log', block.text)
+        } else if (block.type === 'tool_use' && block.name) {
+          // Claude is calling a tool — show what it's doing
+          this.emit('log', this.formatToolUse(block.name, block.input))
         }
       }
+    }
+
+    // Tool results (output of bash commands, file reads, etc.)
+    if (event.type === 'tool_result') {
+      const content = event.content
+      if (typeof content === 'string' && content.trim()) {
+        this.emit('log', content)
+      } else if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'text' && block.text?.trim()) {
+            this.emit('log', block.text)
+          }
+        }
+      }
+    }
+  }
+
+  private formatToolUse(name: string, input: unknown): string {
+    const inp = input as Record<string, unknown> | null | undefined
+    switch (name) {
+      case 'write_file':
+      case 'create_file':
+        return `\n📝 Writing: ${inp?.path ?? inp?.file_path ?? '?'}`
+      case 'edit_file':
+      case 'str_replace_editor':
+        return `\n✏️  Editing: ${inp?.path ?? inp?.file_path ?? '?'}`
+      case 'read_file':
+        return `\n📖 Reading: ${inp?.path ?? inp?.file_path ?? '?'}`
+      case 'bash':
+      case 'execute_bash':
+        return `\n$ ${String(inp?.command ?? inp?.cmd ?? '').slice(0, 120)}`
+      case 'list_directory':
+      case 'ls':
+        return `\n📁 ls ${inp?.path ?? '.'}`
+      case 'search_files':
+      case 'grep':
+        return `\n🔍 Searching: ${inp?.pattern ?? inp?.query ?? ''}`
+      default:
+        return `\n🔧 ${name}`
     }
   }
 
