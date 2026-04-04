@@ -105,12 +105,12 @@ describe('ClaudeRunner', () => {
   // ── spawn args ────────────────────────────────────────────────────────────
 
   describe('start() — spawn arguments', () => {
-    it('spawns claude with --print and stream-json by default', () => {
+    it('spawns claude with --print, --verbose, and stream-json by default', () => {
       new ClaudeRunner().start({ task: 'do something', cwd: '/proj' })
 
       expect(mockSpawn).toHaveBeenCalledWith(
         'claude',
-        expect.arrayContaining(['--print', '--output-format', 'stream-json', '--model', 'sonnet']),
+        expect.arrayContaining(['--print', '--verbose', '--output-format', 'stream-json', '--model', 'sonnet']),
         expect.objectContaining({ cwd: '/proj' })
       )
     })
