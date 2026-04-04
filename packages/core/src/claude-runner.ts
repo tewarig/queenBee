@@ -80,11 +80,12 @@ export class ClaudeRunner extends EventEmitter {
     })
 
     this.process.on('close', (code) => {
-      lastResult.exitCode = code ?? 0
-      if (code === 0) {
+      const exitCode = code ?? 0
+      lastResult.exitCode = exitCode
+      if (exitCode === 0) {
         this.emit('done', lastResult)
       } else {
-        this.emit('error', new Error(`claude exited with code ${code}`))
+        this.emit('error', new Error(`claude exited with code ${exitCode}`))
       }
     })
 
