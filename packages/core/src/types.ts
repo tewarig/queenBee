@@ -11,6 +11,7 @@ export interface Agent {
   model: string
   runner: RunnerType
   status: AgentStatus
+  interactive: boolean
   pid?: number
   createdAt: string
   startedAt?: string
@@ -28,6 +29,7 @@ export interface CreateAgentOptions {
   branchName?: string       // default: auto-derived from task
   model?: string            // default: "sonnet" for claude, "gemini-2.0-flash" for gemini
   runner?: RunnerType       // default: "claude"
+  interactive?: boolean     // default: false — use PTY for bidirectional input
   maxBudgetUsd?: number
   appendSystemPrompt?: string
 }
