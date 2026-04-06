@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { WorktreeManager } from './worktree.js'
 import { ClaudeRunner } from './claude-runner.js'
+import { PtyRunner } from './pty-runner.js'
 import { GeminiRunner } from './gemini-runner.js'
 import { OpenAIRunner } from './openai-runner.js'
 import { OpenCodeRunner } from './opencode-runner.js'
@@ -19,12 +20,17 @@ interface Runner {
   on(event: string | symbol, listener: (...args: any[]) => void): this
   start(options: any): void
   abort(): void
+  sendInput?(text: string): void
+  writeRaw?(data: string): void
 }
+
+const MAX_LOG_BUFFER = 2000 // raw PTY chunks per agent
 
 export class AgentManager extends EventEmitter {
   private agents = new Map<string, Agent>()
   private runners = new Map<string, Runner>()
   private worktreeManagers = new Map<string, WorktreeManager>()
+  private logBuffers = new Map<string, string[]>()
 
   /**
    * Create a new agent (does not start it yet).
@@ -55,6 +61,7 @@ export class AgentManager extends EventEmitter {
       worktreePath,
       model: options.model ?? defaultModel,
       runner: runnerType,
+      interactive: options.interactive ?? false,
       status: 'pending',
       createdAt: new Date().toISOString(),
     }
@@ -78,7 +85,9 @@ export class AgentManager extends EventEmitter {
       case 'gemini': runner = new GeminiRunner(); break
       case 'openai': runner = new OpenAIRunner(); break
       case 'opencode': runner = new OpenCodeRunner(); break
-      default: runner = new ClaudeRunner(); break
+      default:
+        runner = agent.interactive ? new PtyRunner() : new ClaudeRunner()
+        break
     }
     this.runners.set(id, runner)
 
@@ -86,9 +95,16 @@ export class AgentManager extends EventEmitter {
     agent.startedAt = new Date().toISOString()
     agent.pid = undefined
 
+    // Clear log buffer for this run
+    this.logBuffers.set(id, [])
+
     this.emitEvent(agent, 'started', { message: `Agent started using ${agent.runner} on branch ${agent.branch}` })
 
     runner.on('log', (message: string) => {
+      // Buffer for late-joining clients (page reload, new tab)
+      const buf = this.logBuffers.get(id)!
+      buf.push(message)
+      if (buf.length > MAX_LOG_BUFFER) buf.shift()
       this.emitEvent(agent, 'log', { message })
     })
 
@@ -117,6 +133,33 @@ export class AgentManager extends EventEmitter {
       cwd: agent.worktreePath,
       model: agent.model,
     })
+  }
+
+  /**
+   * Send text input to a running interactive agent (e.g. to answer Claude's question).
+   */
+  sendInput(id: string, text: string): void {
+    const runner = this.runners.get(id)
+    if (!runner) throw new Error(`Agent ${id} is not running`)
+    if (!runner.sendInput) throw new Error(`Agent ${id} does not support interactive input`)
+    runner.sendInput(text)
+  }
+
+  /**
+   * Write raw key data to the PTY as-is (used by xterm.js web terminal).
+   */
+  sendRaw(id: string, data: string): void {
+    const runner = this.runners.get(id)
+    if (!runner) throw new Error(`Agent ${id} is not running`)
+    if (!runner.writeRaw) throw new Error(`Agent ${id} does not support raw input`)
+    runner.writeRaw(data)
+  }
+
+  /**
+   * Return buffered log chunks for an agent (for page-reload replay).
+   */
+  getLogs(id: string): string[] {
+    return [...(this.logBuffers.get(id) ?? [])]
   }
 
   /**

@@ -11,8 +11,30 @@ export function useAgents() {
   const fetchAgents = useCallback(async () => {
     try {
       const res = await fetch('/api/agents')
-      const data = await res.json()
+      const data: Agent[] = await res.json()
       setAgents(data)
+
+      // Replay buffered logs for agents that already have output
+      const withLogs = data.filter(a => a.status === 'running' || a.status === 'completed' || a.status === 'failed')
+      if (withLogs.length > 0) {
+        const results = await Promise.all(
+          withLogs.map(a =>
+            fetch(`/api/agents/${a.id}/logs`)
+              .then(r => r.json())
+              .catch(() => ({ logs: [] }))
+          )
+        )
+        setLogs(prev => {
+          const next = { ...prev }
+          withLogs.forEach((a, i) => {
+            const buffered: string[] = results[i]?.logs ?? []
+            if (buffered.length > 0) {
+              next[a.id] = buffered
+            }
+          })
+          return next
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -27,7 +49,7 @@ export function useAgents() {
       if (e.data === ': ok') return
       try {
         const event: AgentEvent = JSON.parse(e.data)
-        
+
         if (event.type === 'log') {
           setLogs(prev => ({
             ...prev,
@@ -77,7 +99,7 @@ export function useAgents() {
   }
 
   const startAgent = async (id: string) => {
-    setLogs(prev => ({ ...prev, [id]: [] })) // Clear logs on start
+    setLogs(prev => ({ ...prev, [id]: [] }))
     await fetch(`/api/agents/${id}/start`, { method: 'POST' })
   }
 
@@ -85,5 +107,21 @@ export function useAgents() {
     await fetch(`/api/agents/${id}/cancel`, { method: 'POST' })
   }
 
-  return { agents, logs, loading, createAgent, startAgent, cancelAgent, refresh: fetchAgents }
+  const sendInput = async (id: string, text: string) => {
+    await fetch(`/api/agents/${id}/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+  }
+
+  const sendRaw = async (id: string, data: string) => {
+    await fetch(`/api/agents/${id}/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: data }),
+    })
+  }
+
+  return { agents, logs, loading, createAgent, startAgent, cancelAgent, sendInput, sendRaw, refresh: fetchAgents }
 }
