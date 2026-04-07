@@ -1,168 +1,232 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AgentOrchestrator } from './AgentOrchestrator'
 import { useAgents } from '@/hooks/use-agents'
 
-// Mock useAgents
-vi.mock('@/hooks/use-agents', () => ({
-  useAgents: vi.fn(),
+vi.mock('@/hooks/use-agents', () => ({ useAgents: vi.fn() }))
+
+// TerminalPane mock — captures the latest onData prop so tests can invoke it
+let capturedOnData: ((data: string) => void) | null = null
+vi.mock('@/components/TerminalPane', () => ({
+  TerminalPane: vi.fn((props: any) => {
+    capturedOnData = props.onData
+    return <div data-testid="terminal-pane" />
+  }),
 }))
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+const mkAgent = (overrides: Record<string, unknown> = {}) => ({
+  id: '12345678-1',
+  task: 'Task 1',
+  status: 'pending',
+  branch: 'qb/task-1',
+  model: 'sonnet',
+  runner: 'claude',
+  interactive: true,
+  ...overrides,
+})
+
+const mockCreateAgent = vi.fn()
+const mockStartAgent  = vi.fn()
+const mockCancelAgent = vi.fn()
+const mockSendRaw     = vi.fn()
+const mockRefresh     = vi.fn()
+
+function setupHook(overrides: Record<string, unknown> = {}) {
+  ;(useAgents as any).mockReturnValue({
+    agents: [mkAgent(), mkAgent({ id: '12345678-2', task: 'Task 2', status: 'running', runner: 'gemini', model: 'gemini-2.0-flash', branch: 'qb/task-2' })],
+    logs: {},
+    loading: false,
+    createAgent: mockCreateAgent,
+    startAgent: mockStartAgent,
+    cancelAgent: mockCancelAgent,
+    sendRaw: mockSendRaw,
+    refresh: mockRefresh,
+    ...overrides,
+  })
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
 describe('AgentOrchestrator', () => {
-  const mockAgents = [
-    {
-      id: '12345678-1',
-      task: 'Task 1',
-      status: 'pending',
-      branch: 'qb/task-1',
-      model: 'sonnet',
-      runner: 'claude',
-    },
-    {
-      id: '12345678-2',
-      task: 'Task 2',
-      status: 'running',
-      branch: 'qb/task-2',
-      model: 'gemini-2.0-flash',
-      runner: 'gemini',
-    },
-  ]
-
-  const mockCreateAgent = vi.fn()
-  const mockStartAgent = vi.fn()
-  const mockCancelAgent = vi.fn()
-  const mockRefresh = vi.fn()
-
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(useAgents as any).mockReturnValue({
-      agents: mockAgents,
-      logs: {},
-      loading: false,
-      createAgent: mockCreateAgent,
-      startAgent: mockStartAgent,
-      cancelAgent: mockCancelAgent,
-      refresh: mockRefresh,
-    })
+    capturedOnData = null
+    setupHook()
   })
 
-  it('renders a list of agents', () => {
+  // ── rendering ──────────────────────────────────────────────────────────────
+
+  it('renders agent task names', () => {
     render(<AgentOrchestrator />)
     expect(screen.getByText('Task 1')).toBeInTheDocument()
     expect(screen.getByText('Task 2')).toBeInTheDocument()
+  })
+
+  it('renders runner badges', () => {
+    render(<AgentOrchestrator />)
     expect(screen.getByText('claude')).toBeInTheDocument()
     expect(screen.getByText('gemini')).toBeInTheDocument()
   })
 
-  it('handles spawning a new agent', async () => {
+  it('renders branch and model metadata', () => {
     render(<AgentOrchestrator />)
-    
-    const taskInput = screen.getByPlaceholderText('Explain what the agent should do...')
-    fireEvent.change(taskInput, { target: { value: 'New Task' } })
-    
-    const submitButton = screen.getByText('Spawn Agent')
-    fireEvent.click(submitButton)
-    
-    await waitFor(() => {
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
-        task: 'New Task'
-      }))
-    })
-  })
-
-  it('handles starting an agent', () => {
-    render(<AgentOrchestrator />)
-    const startButtons = screen.getAllByText('Start')
-    fireEvent.click(startButtons[0])
-    expect(mockStartAgent).toHaveBeenCalledWith('12345678-1')
-  })
-
-  it('handles cancelling an agent', () => {
-    render(<AgentOrchestrator />)
-    const cancelButtons = screen.getAllByText('Cancel')
-    fireEvent.click(cancelButtons[0])
-    expect(mockCancelAgent).toHaveBeenCalledWith('12345678-2')
-  })
-
-  it('toggles log display', () => {
-    render(<AgentOrchestrator />)
-    const showLogButtons = screen.getAllByText('Show Logs')
-    fireEvent.click(showLogButtons[0])
-    expect(screen.getByText('Live Logs')).toBeInTheDocument()
-    
-    fireEvent.click(screen.getByText('Hide Logs'))
-    expect(screen.queryByText('Live Logs')).not.toBeInTheDocument()
+    expect(screen.getByText('qb/task-1')).toBeInTheDocument()
+    expect(screen.getByText('sonnet')).toBeInTheDocument()
   })
 
   it('shows loading state', () => {
-    ;(useAgents as any).mockReturnValue({
-      agents: [],
-      loading: true,
-    })
+    ;(useAgents as any).mockReturnValue({ agents: [], loading: true })
     render(<AgentOrchestrator />)
     expect(screen.getByText('Loading agents...')).toBeInTheDocument()
   })
 
-  it('shows empty state', () => {
-    ;(useAgents as any).mockReturnValue({
-      agents: [],
-      loading: false,
-      refresh: mockRefresh,
-    })
+  it('shows empty state when no agents exist', () => {
+    setupHook({ agents: [], loading: false })
     render(<AgentOrchestrator />)
-    expect(screen.getByText('No agents spawned yet.')).toBeInTheDocument()
+    expect(screen.getByText(/No agents spawned yet/)).toBeInTheDocument()
   })
 
-  it('handles refresh', () => {
+  it('renders TerminalPane for each agent when terminal is shown', () => {
+    // Running agents auto-show the terminal
+    setupHook({ agents: [mkAgent({ status: 'running' })] })
     render(<AgentOrchestrator />)
-    const refreshButton = screen.getByText('Refresh')
-    fireEvent.click(refreshButton)
-    expect(mockRefresh).toHaveBeenCalled()
+    expect(screen.getByTestId('terminal-pane')).toBeInTheDocument()
   })
 
-  it('handles custom repo path', async () => {
+  it('shows interactive badge for interactive agents', () => {
     render(<AgentOrchestrator />)
-    const repoInput = screen.getByLabelText('Repo Path')
-    fireEvent.change(repoInput, { target: { value: '/custom/repo' } })
-    
-    // Must also set task because it's required
-    const taskInput = screen.getByLabelText('Task')
-    fireEvent.change(taskInput, { target: { value: 'Task' } })
-
-    const submitButton = screen.getByText('Spawn Agent')
-    fireEvent.click(submitButton)
-    
-    await waitFor(() => {
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
-        repoPath: '/custom/repo'
-      }))
-    })
+    expect(screen.getAllByText('interactive').length).toBeGreaterThan(0)
   })
 
-  it('handles rerun for completed agent', () => {
-    ;(useAgents as any).mockReturnValue({
-      agents: [{ ...mockAgents[0], status: 'completed' }],
-      logs: {},
-      loading: false,
-      startAgent: mockStartAgent,
-    })
+  // ── spawn bar ──────────────────────────────────────────────────────────────
+
+  it('spawns a new agent on form submit', async () => {
     render(<AgentOrchestrator />)
-    const rerunButton = screen.getByText('Rerun')
-    fireEvent.click(rerunButton)
+    fireEvent.change(screen.getByPlaceholderText('Explain what the agent should do...'), {
+      target: { value: 'New Task' },
+    })
+    fireEvent.click(screen.getByText('Spawn Agent'))
+    await waitFor(() =>
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({ task: 'New Task' }))
+    )
+  })
+
+  it('spawns with custom repo path', async () => {
+    render(<AgentOrchestrator />)
+    fireEvent.change(screen.getByLabelText('Repo Path'), { target: { value: '/custom/repo' } })
+    fireEvent.change(screen.getByPlaceholderText('Explain what the agent should do...'), {
+      target: { value: 'Do something' },
+    })
+    fireEvent.click(screen.getByText('Spawn Agent'))
+    await waitFor(() =>
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({ repoPath: '/custom/repo' }))
+    )
+  })
+
+  it('toggles interactive checkbox', async () => {
+    render(<AgentOrchestrator />)
+    const checkbox = screen.getByRole('checkbox')
+    // Default is checked (interactive: true)
+    expect(checkbox).toBeChecked()
+    fireEvent.click(checkbox)
+    fireEvent.change(screen.getByPlaceholderText('Explain what the agent should do...'), {
+      target: { value: 'Task' },
+    })
+    fireEvent.click(screen.getByText('Spawn Agent'))
+    await waitFor(() =>
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({ interactive: false }))
+    )
+  })
+
+  it('clears the task field after spawning', async () => {
+    mockCreateAgent.mockResolvedValue({ id: 'new', task: 'New Task', status: 'pending' })
+    render(<AgentOrchestrator />)
+    const textarea = screen.getByPlaceholderText('Explain what the agent should do...')
+    fireEvent.change(textarea, { target: { value: 'New Task' } })
+    fireEvent.click(screen.getByText('Spawn Agent'))
+    await waitFor(() => expect(textarea).toHaveValue(''))
+  })
+
+  // ── agent card actions ─────────────────────────────────────────────────────
+
+  it('starts a pending agent', () => {
+    render(<AgentOrchestrator />)
+    fireEvent.click(screen.getAllByText('Start')[0])
     expect(mockStartAgent).toHaveBeenCalledWith('12345678-1')
   })
 
-  it('displays summary and error', () => {
-    ;(useAgents as any).mockReturnValue({
-      agents: [
-        { ...mockAgents[0], status: 'completed', summary: 'all good' },
-        { ...mockAgents[1], status: 'failed', error: 'boom' },
-      ],
-      logs: {},
-      loading: false,
-    })
+  it('cancels a running agent', () => {
+    render(<AgentOrchestrator />)
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(mockCancelAgent).toHaveBeenCalledWith('12345678-2')
+  })
+
+  it('reruns a completed agent', () => {
+    setupHook({ agents: [mkAgent({ status: 'completed' })] })
+    render(<AgentOrchestrator />)
+    fireEvent.click(screen.getByText('Rerun'))
+    expect(mockStartAgent).toHaveBeenCalledWith('12345678-1')
+  })
+
+  it('reruns a failed agent', () => {
+    setupHook({ agents: [mkAgent({ status: 'failed', error: 'err' })] })
+    render(<AgentOrchestrator />)
+    fireEvent.click(screen.getByText('Rerun'))
+    expect(mockStartAgent).toHaveBeenCalledWith('12345678-1')
+  })
+
+  it('calls refresh when Refresh button is clicked', () => {
+    render(<AgentOrchestrator />)
+    fireEvent.click(screen.getByText('Refresh'))
+    expect(mockRefresh).toHaveBeenCalled()
+  })
+
+  // ── terminal toggle ────────────────────────────────────────────────────────
+
+  it('shows "Show Terminal" button for non-running agents', () => {
+    render(<AgentOrchestrator />)
+    expect(screen.getAllByText('Show Terminal').length).toBeGreaterThan(0)
+  })
+
+  it('toggles terminal panel via Show/Hide Terminal button', () => {
+    setupHook({ agents: [mkAgent({ status: 'pending' })] })
+    render(<AgentOrchestrator />)
+
+    expect(screen.queryByTestId('terminal-pane')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Show Terminal'))
+    expect(screen.getByTestId('terminal-pane')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Hide Terminal'))
+    expect(screen.queryByTestId('terminal-pane')).not.toBeInTheDocument()
+  })
+
+  it('auto-opens terminal when agent status becomes running', () => {
+    // Agent starts running — terminal should auto-open
+    setupHook({ agents: [mkAgent({ status: 'running' })] })
+    render(<AgentOrchestrator />)
+    expect(screen.getByTestId('terminal-pane')).toBeInTheDocument()
+    expect(screen.getByText('Hide Terminal')).toBeInTheDocument()
+  })
+
+  it('forwards TerminalPane onData to sendRaw', () => {
+    setupHook({ agents: [mkAgent({ status: 'running' })] })
+    render(<AgentOrchestrator />)
+    act(() => capturedOnData?.('\x03'))
+    expect(mockSendRaw).toHaveBeenCalledWith('12345678-1', '\x03')
+  })
+
+  // ── summary / error display ────────────────────────────────────────────────
+
+  it('displays agent summary when completed', () => {
+    setupHook({ agents: [mkAgent({ status: 'completed', summary: 'all good' })] })
     render(<AgentOrchestrator />)
     expect(screen.getByText('all good')).toBeInTheDocument()
-    expect(screen.getByText('boom')).toBeInTheDocument()
+  })
+
+  it('displays agent error when failed', () => {
+    setupHook({ agents: [mkAgent({ status: 'failed', error: 'something broke' })] })
+    render(<AgentOrchestrator />)
+    expect(screen.getByText('something broke')).toBeInTheDocument()
   })
 })

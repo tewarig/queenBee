@@ -231,6 +231,138 @@ describe('ClaudeRunner', () => {
       expect(logs.some(l => l.includes('npm test'))).toBe(true)
     })
 
+    it('formats write_file tool_use', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'write_file', input: { path: '/out.ts' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('/out.ts'))).toBe(true)
+    })
+
+    it('formats edit_file tool_use', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'edit_file', input: { path: '/src/main.ts' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('/src/main.ts'))).toBe(true)
+    })
+
+    it('formats read_file tool_use', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'read_file', input: { path: '/foo.ts' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('/foo.ts'))).toBe(true)
+    })
+
+    it('formats list_directory tool_use', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'ls', input: { path: '/src' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('/src'))).toBe(true)
+    })
+
+    it('formats search_files tool_use', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'grep', input: { pattern: 'TODO' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('TODO'))).toBe(true)
+    })
+
+    it('formats unknown tool_use with generic icon', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'custom_tool', input: {} }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('custom_tool'))).toBe(true)
+    })
+
+    it('formats write_file with file_path fallback key', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'create_file', input: { file_path: '/new.ts' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('/new.ts'))).toBe(true)
+    })
+
+    it('formats edit_file with file_path fallback key', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'str_replace_editor', input: { file_path: '/edit.ts' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('/edit.ts'))).toBe(true)
+    })
+
+    it('formats bash with cmd fallback key', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'execute_bash', input: { cmd: 'ls -la' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('ls -la'))).toBe(true)
+    })
+
+    it('formats list_directory with no path (uses dot fallback)', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'list_directory', input: {} }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('.'))).toBe(true)
+    })
+
+    it('formats grep with query fallback key', async () => {
+      const { logs } = await runToCompletion({
+        proc,
+        stdoutLines: [
+          JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'search_files', input: { query: 'myFunc' } }] } }),
+          JSON.stringify({ type: 'result', result: 'done' }),
+        ],
+      })
+
+      expect(logs.some(l => l.includes('myFunc'))).toBe(true)
+    })
+
     it('emits a generic tool log when tool_use has no name', async () => {
       const { logs } = await runToCompletion({
         proc,
