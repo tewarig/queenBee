@@ -120,28 +120,27 @@ export function TerminalPane({ logs, interactive, running, onData }: TerminalPan
   }, [logs])
 
   return (
-    <div style={{ marginTop: '1rem', borderRadius: '6px', overflow: 'hidden', border: '1px solid #30363d' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0d1117' }}>
       {/* Title bar */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '0.35rem 0.75rem',
-        background: '#161b22',
-        borderBottom: '1px solid #30363d',
-        fontSize: '0.7rem',
+        padding: '0.3rem 0.75rem',
+        background: '#111',
+        borderBottom: '1px solid #1e1e1e',
+        fontSize: '0.68rem',
         fontWeight: 600,
-        color: '#8b949e',
+        color: '#4b5563',
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
         userSelect: 'none',
+        flexShrink: 0,
       }}>
         <span>Terminal</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {interactive && (
-            <span style={{ color: '#58a6ff', fontSize: '0.65rem' }}>
-              {running ? 'click to type' : 'interactive'}
-            </span>
+          {interactive && running && (
+            <span style={{ color: '#60a5fa', fontSize: '0.65rem' }}>click to type</span>
           )}
           {running && (
             <span style={{ color: '#3fb950', fontWeight: 700 }}>● LIVE</span>
@@ -149,10 +148,10 @@ export function TerminalPane({ logs, interactive, running, onData }: TerminalPan
         </span>
       </div>
 
-      {/* xterm mounts here */}
+      {/* xterm mounts here — fills remaining height */}
       <div
         ref={containerRef}
-        style={{ height: '520px', background: '#0d1117', padding: '2px' }}
+        style={{ flex: 1, background: '#0d1117', overflow: 'hidden', padding: '4px 2px 2px' }}
       />
     </div>
   )
