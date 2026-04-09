@@ -27,18 +27,34 @@ vi.mock('../worktree.js', () => ({
   })),
 }))
 
-// ClaudeRunner — return an EventEmitter so tests can fire events
+// Base mock runner — no sendInput/writeRaw (like ClaudeRunner, Gemini, etc.)
 class MockRunner extends EventEmitter {
   start = vi.fn()
   abort = vi.fn()
 }
 
+// Interactive mock runner — has sendInput and writeRaw (like PtyRunner)
+class MockPtyRunner extends EventEmitter {
+  start = vi.fn()
+  abort = vi.fn()
+  sendInput = vi.fn()
+  writeRaw = vi.fn()
+}
+
 let mockRunner: MockRunner
+let mockPtyRunner: MockPtyRunner
 
 vi.mock('../claude-runner.js', () => ({
   ClaudeRunner: vi.fn().mockImplementation(() => {
     mockRunner = new MockRunner()
     return mockRunner
+  }),
+}))
+
+vi.mock('../pty-runner.js', () => ({
+  PtyRunner: vi.fn().mockImplementation(() => {
+    mockPtyRunner = new MockPtyRunner()
+    return mockPtyRunner
   }),
 }))
 
@@ -431,6 +447,126 @@ describe('AgentManager', () => {
 
     it('throws when id does not exist', async () => {
       await expect(mgr.remove('ghost')).rejects.toThrow('not found')
+    })
+  })
+
+  // ── interactive / PtyRunner ───────────────────────────────────────────────
+
+  describe('interactive mode', () => {
+    it('uses PtyRunner when interactive: true and runner is claude', async () => {
+      const { PtyRunner } = await import('../pty-runner.js')
+      const agent = await makeAgent(mgr, { interactive: true })
+      mgr.start(agent.id)
+      expect(PtyRunner).toHaveBeenCalled()
+    })
+
+    it('still uses ClaudeRunner when interactive: false', async () => {
+      const { ClaudeRunner } = await import('../claude-runner.js')
+      const agent = await makeAgent(mgr, { interactive: false })
+      mgr.start(agent.id)
+      expect(ClaudeRunner).toHaveBeenCalled()
+    })
+
+    it('forwards log events from PtyRunner to SSE', async () => {
+      const agent = await makeAgent(mgr, { interactive: true })
+      const events: AgentEvent[] = []
+      mgr.on('event', (e: AgentEvent) => events.push(e))
+      mgr.start(agent.id)
+      mockPtyRunner.emit('log', 'pty output')
+      expect(events.find(e => e.type === 'log')?.data.message).toBe('pty output')
+    })
+  })
+
+  // ── sendInput ─────────────────────────────────────────────────────────────
+
+  describe('sendInput()', () => {
+    it('calls runner.sendInput for an interactive agent', async () => {
+      const agent = await makeAgent(mgr, { interactive: true })
+      mgr.start(agent.id)
+      mgr.sendInput(agent.id, 'yes')
+      expect(mockPtyRunner.sendInput).toHaveBeenCalledWith('yes')
+    })
+
+    it('throws when agent is not running', async () => {
+      expect(() => mgr.sendInput('ghost', 'hi')).toThrow('not running')
+    })
+
+    it('throws when runner does not support sendInput', async () => {
+      const agent = await makeAgent(mgr) // ClaudeRunner — no sendInput
+      mgr.start(agent.id)
+      expect(() => mgr.sendInput(agent.id, 'hi')).toThrow('does not support interactive input')
+    })
+  })
+
+  // ── sendRaw ───────────────────────────────────────────────────────────────
+
+  describe('sendRaw()', () => {
+    it('calls runner.writeRaw for an interactive agent', async () => {
+      const agent = await makeAgent(mgr, { interactive: true })
+      mgr.start(agent.id)
+      mgr.sendRaw(agent.id, '\x03')
+      expect(mockPtyRunner.writeRaw).toHaveBeenCalledWith('\x03')
+    })
+
+    it('throws when agent is not running', () => {
+      expect(() => mgr.sendRaw('ghost', '\x03')).toThrow('not running')
+    })
+
+    it('throws when runner does not support writeRaw', async () => {
+      const agent = await makeAgent(mgr) // ClaudeRunner — no writeRaw
+      mgr.start(agent.id)
+      expect(() => mgr.sendRaw(agent.id, '\x03')).toThrow('does not support raw input')
+    })
+  })
+
+  // ── getLogs ───────────────────────────────────────────────────────────────
+
+  describe('getLogs()', () => {
+    it('returns an empty array for an agent that has not started', async () => {
+      const agent = await makeAgent(mgr)
+      expect(mgr.getLogs(agent.id)).toEqual([])
+    })
+
+    it('returns an empty array for an unknown id', () => {
+      expect(mgr.getLogs('ghost')).toEqual([])
+    })
+
+    it('returns buffered log chunks in order', async () => {
+      const agent = await makeAgent(mgr)
+      mgr.start(agent.id)
+      mockRunner.emit('log', 'first')
+      mockRunner.emit('log', 'second')
+      expect(mgr.getLogs(agent.id)).toEqual(['first', 'second'])
+    })
+
+    it('returns a copy — mutations do not affect the internal buffer', async () => {
+      const agent = await makeAgent(mgr)
+      mgr.start(agent.id)
+      mockRunner.emit('log', 'chunk')
+      const logs = mgr.getLogs(agent.id)
+      logs.push('injected')
+      expect(mgr.getLogs(agent.id)).toEqual(['chunk'])
+    })
+
+    it('clears the buffer when the agent is restarted', async () => {
+      const agent = await makeAgent(mgr)
+      mgr.start(agent.id)
+      mockRunner.emit('log', 'old output')
+      mockRunner.emit('done', { summary: 'done' })
+      expect(mgr.getLogs(agent.id)).toEqual(['old output'])
+
+      mgr.start(agent.id) // restart
+      expect(mgr.getLogs(agent.id)).toEqual([])
+
+      mockRunner.emit('log', 'new output')
+      expect(mgr.getLogs(agent.id)).toEqual(['new output'])
+    })
+
+    it('buffers logs from interactive (PtyRunner) agents', async () => {
+      const agent = await makeAgent(mgr, { interactive: true })
+      mgr.start(agent.id)
+      mockPtyRunner.emit('log', 'pty chunk')
+      expect(mgr.getLogs(agent.id)).toEqual(['pty chunk'])
     })
   })
 
