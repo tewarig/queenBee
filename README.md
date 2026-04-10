@@ -8,7 +8,7 @@ QueenBee lets you spawn, manage, and interact with multiple AI agents (Claude Co
 
 ## Demo
 
-https://github.com/tewarig/queenBee/blob/main/initial_demo.mov
+<video src="https://raw.githubusercontent.com/tewarig/queenBee/main/initial_demo.mov" controls width="100%"></video>
 
 > Spawn an interactive Claude Code agent, watch it work in real time, and type directly into the terminal to guide it.
 
