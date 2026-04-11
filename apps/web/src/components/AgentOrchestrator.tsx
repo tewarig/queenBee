@@ -433,24 +433,36 @@ function AppStyles() {
   return (
     <style jsx global>{`
       *, *::before, *::after { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; height: 100%; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        /* Prevent the whole page bouncing/rubber-banding on iOS */
+        overscroll-behavior: none;
+        overflow: hidden;
+      }
 
       /* ── Shell ── */
       .app-shell {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        /* 100dvh accounts for the mobile browser chrome (address bar).
+           100vh on iOS Safari is taller than the visible area, causing layout overflow. */
+        height: 100dvh;
         background: #0d0d0d;
         color: #e2e2e2;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         overflow: hidden;
+        /* Promote to GPU layer — avoids compositing jank during scroll */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
       }
 
       .loading {
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 100vh;
+        height: 100dvh;
         color: #6b7280;
         font-size: 0.9rem;
       }
@@ -474,6 +486,12 @@ function AppStyles() {
         flex: 1;
         scrollbar-width: none;
         height: 100%;
+        /* Momentum scrolling on iOS */
+        -webkit-overflow-scrolling: touch;
+        /* Only handle horizontal swipes, let vertical pass through */
+        touch-action: pan-x;
+        /* Don't let tab scroll trigger page scroll */
+        overscroll-behavior-x: contain;
       }
       .tabs::-webkit-scrollbar { display: none; }
 
@@ -711,7 +729,7 @@ function AppStyles() {
         align-items: center;
         justify-content: space-between;
         padding: 0 16px;
-        height: 40px;
+        min-height: 40px;
         background: #161616;
         border-bottom: 1px solid #2a2a2a;
         flex-shrink: 0;
@@ -865,6 +883,9 @@ function AppStyles() {
         max-width: calc(100vw - 32px);
         box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
         overflow: hidden;
+        /* Smooth scroll inside modal on iOS */
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
       }
       .modal-header {
         display: flex;
@@ -949,6 +970,85 @@ function AppStyles() {
         justify-content: flex-end;
         gap: 8px;
         padding-top: 4px;
+      }
+
+      /* ── Mobile (≤ 640px) ─────────────────────────────────────────────────── */
+      @media (max-width: 640px) {
+
+        /* Larger tap targets in the tab bar */
+        .tab-bar { height: 44px; }
+        .tab { padding: 0 8px 0 10px; min-width: 44px; }
+        .tab-label { max-width: 100px; }
+        .tab-add { width: 44px; }
+        .icon-btn { width: 36px; height: 36px; }
+        .settings-btn { width: 44px !important; height: 44px !important; }
+
+        /* Settings panel: pin to screen width, avoid left-edge overflow */
+        .settings-panel {
+          width: calc(100vw - 16px);
+          left: 0;
+          max-height: calc(100dvh - 60px);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+        }
+
+        /* Info bar: wrap to two lines instead of clipping */
+        .info-bar {
+          height: auto;
+          min-height: 44px;
+          padding: 6px 12px;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .info-left {
+          flex-wrap: wrap;
+          gap: 6px;
+          min-width: 0;
+        }
+        /* Hide branch + model on very small screens to save space */
+        .info-bar .meta-item:nth-child(3),
+        .info-bar .meta-item:nth-child(4) { display: none; }
+
+        /* Action buttons: tighter on mobile */
+        .action-btn { padding: 5px 10px; font-size: 0.72rem; }
+
+        /* Task bar: smaller text, allow wrapping */
+        .task-bar { padding: 6px 12px; flex-wrap: wrap; gap: 4px; }
+        .task-text { font-size: 0.8rem; }
+        .agent-id-label { display: none; }
+
+        /* Banners */
+        .banner { padding: 6px 12px; font-size: 0.78rem; }
+
+        /* Modal: full-width sheet from bottom on mobile */
+        .modal-overlay { align-items: flex-end; }
+        .modal {
+          width: 100%;
+          max-width: 100%;
+          border-radius: 16px 16px 0 0;
+          max-height: 92dvh;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+        }
+        .modal-form { padding: 16px; gap: 14px; }
+        .modal-header { padding: 14px 16px; }
+
+        /* Stack form row vertically on mobile */
+        .form-row { flex-direction: column; gap: 12px; }
+        .form-field-checkbox { justify-content: flex-start; padding-bottom: 0; }
+
+        /* Modal footer: full-width buttons */
+        .modal-footer { flex-direction: column-reverse; }
+        .modal-footer .btn { width: 100%; text-align: center; }
+      }
+
+      /* ── Tablet (641px – 1024px) ──────────────────────────────────────────── */
+      @media (min-width: 641px) and (max-width: 1024px) {
+        .tab-label { max-width: 120px; }
+        .info-bar .meta-item:nth-child(4) { display: none; } /* hide model badge */
+        .modal { width: 480px; }
       }
     `}</style>
   )
