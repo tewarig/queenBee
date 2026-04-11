@@ -3,6 +3,12 @@ import { EventEmitter } from 'node:events'
 import { createInterface } from 'node:readline'
 import type { RunOptions } from './claude-runner.js'
 
+const NVM_DIR = process.env.NVM_DIR ?? `${process.env.HOME}/.nvm`
+// Gemini CLI requires Node >= 20.5.0; use v22.0.0 explicitly
+const NODE_22 = `${NVM_DIR}/versions/node/v22.0.0/bin/node`
+// Gemini is installed under v20.0.0 — run its script with the v22 node binary
+const GEMINI_BIN = `${NVM_DIR}/versions/node/v20.0.0/bin/gemini`
+
 export class GeminiRunner extends EventEmitter {
   private process?: ChildProcess
 
@@ -11,23 +17,21 @@ export class GeminiRunner extends EventEmitter {
    * Emits: 'log' (string), 'done' (RunResult), 'error' (Error)
    */
   start(options: RunOptions): void {
-    // gemini CLI might have different flags.
-    // Assuming it supports similar flow for now, or just basic execution.
+
     const args = [
-      'run',
+      '--prompt', options.task,
       '--model', options.model ?? 'gemini-2.0-flash',
+      '--yolo',
+      '--output-format', 'stream-json',
     ]
 
-    // Task is the final positional argument
-    args.push(options.task)
-
-    this.process = spawn('gemini', args, {
+    this.process = spawn(NODE_22, [GEMINI_BIN, ...args], {
       cwd: options.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env },
     })
 
     const rl = createInterface({ input: this.process.stdout! })
-
     rl.on('line', (line) => {
       if (!line.trim()) return
       this.emit('log', line)
