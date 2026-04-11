@@ -436,6 +436,7 @@ function AppStyles() {
       html, body {
         margin: 0;
         padding: 0;
+        width: 100%;
         height: 100%;
         /* Prevent the whole page bouncing/rubber-banding on iOS */
         overscroll-behavior: none;
@@ -446,6 +447,7 @@ function AppStyles() {
       .app-shell {
         display: flex;
         flex-direction: column;
+        width: 100%;
         /* 100dvh accounts for the mobile browser chrome (address bar).
            100vh on iOS Safari is taller than the visible area, causing layout overflow. */
         height: 100dvh;
@@ -1042,6 +1044,13 @@ function AppStyles() {
         /* Modal footer: full-width buttons */
         .modal-footer { flex-direction: column-reverse; }
         .modal-footer .btn { width: 100%; text-align: center; }
+      }
+
+      /* ── Mobile landscape (short height, wide width) ─────────────────────── */
+      @media (max-height: 500px) and (orientation: landscape) {
+        .tab-bar { height: 36px; }
+        .info-bar { min-height: 32px; padding: 4px 12px; }
+        .task-bar { padding: 4px 12px; }
       }
 
       /* ── Tablet (641px – 1024px) ──────────────────────────────────────────── */

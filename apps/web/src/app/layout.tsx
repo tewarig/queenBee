@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, padding: 0, backgroundColor: '#0d0d0d' }}>{children}</body>
+      <body style={{ margin: 0, padding: 0, width: '100%', backgroundColor: '#0d0d0d' }}>{children}</body>
     </html>
   )
 }
