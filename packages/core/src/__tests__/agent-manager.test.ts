@@ -448,6 +448,20 @@ describe('AgentManager', () => {
     it('throws when id does not exist', async () => {
       await expect(mgr.remove('ghost')).rejects.toThrow('not found')
     })
+
+    it('clears the log buffer after removal so memory is not leaked', async () => {
+      const agent = await makeAgent(mgr)
+      // Simulate some buffered logs
+      mgr.start(agent.id)
+      mockRunner.emit('log', 'line 1')
+      mockRunner.emit('log', 'line 2')
+      expect(mgr.getLogs(agent.id)).toHaveLength(2)
+
+      await mgr.remove(agent.id)
+
+      // getLogs returns [] for unknown ids — confirms buffer was deleted
+      expect(mgr.getLogs(agent.id)).toEqual([])
+    })
   })
 
   // ── interactive / PtyRunner ───────────────────────────────────────────────

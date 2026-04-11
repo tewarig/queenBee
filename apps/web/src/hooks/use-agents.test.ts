@@ -1,6 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useAgents } from './use-agents'
+import { useAgents, looksLikeInputPrompt } from './use-agents'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -210,8 +210,8 @@ describe('useAgents', () => {
 
   it('createAgent POSTs and appends new agent to list', async () => {
     global.fetch = vi.fn()
-      .mockResolvedValueOnce({ json: () => Promise.resolve([mkAgent()]) })
-      .mockResolvedValueOnce({ json: () => Promise.resolve(mkAgent({ id: '5678', task: 'new' })) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mkAgent()]) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mkAgent({ id: '5678', task: 'new' })) })
     const { result } = renderHook(() => useAgents())
     await waitFor(() => expect(result.current.agents).toHaveLength(1))
     await act(async () => result.current.createAgent({ task: 'new' }))
@@ -245,5 +245,142 @@ describe('useAgents', () => {
     const before = (global.fetch as any).mock.calls.length
     await act(async () => result.current.refresh())
     expect((global.fetch as any).mock.calls.length).toBeGreaterThan(before)
+  })
+
+  // ── removeAgent ────────────────────────────────────────────────────────────
+
+  it('removeAgent DELETEs the agent and removes it from state', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mkAgent()]) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ logs: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) })
+    const { result } = renderHook(() => useAgents())
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    await act(async () => result.current.removeAgent('1234'))
+    expect(global.fetch).toHaveBeenCalledWith('/api/agents/1234', expect.objectContaining({ method: 'DELETE' }))
+    expect(result.current.agents).toHaveLength(0)
+  })
+
+  it('removeAgent also clears the log buffer for the agent', async () => {
+    setupFetch([mkAgent({ status: 'running' })], { logs: ['some log'] }, { success: true })
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mkAgent({ status: 'running' })]) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ logs: ['some log'] }) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) })
+    const { result } = renderHook(() => useAgents())
+    await waitFor(() => expect(result.current.logs['1234']).toEqual(['some log']))
+    await act(async () => result.current.removeAgent('1234'))
+    expect(result.current.logs['1234']).toBeUndefined()
+  })
+
+  it('removeAgent does not update state when server returns an error', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mkAgent()]) })
+      .mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ error: 'not found' }) })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useAgents())
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    await act(async () => result.current.removeAgent('1234'))
+    expect(result.current.agents).toHaveLength(1) // agent stays
+    expect(spy).toHaveBeenCalledWith('Failed to remove agent:', 'not found')
+    spy.mockRestore()
+  })
+
+  // ── onNotify callbacks ─────────────────────────────────────────────────────
+
+  it('calls onNotify("done") when a completed event arrives', async () => {
+    const { fire } = setupEventSource()
+    const onNotify = vi.fn()
+    const { result } = renderHook(() => useAgents(onNotify))
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    act(() => fire({ agentId: '1234', type: 'completed', data: { summary: 'done' } }))
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith('done', 'test'))
+  })
+
+  it('calls onNotify("failed") when a failed event arrives', async () => {
+    const { fire } = setupEventSource()
+    const onNotify = vi.fn()
+    const { result } = renderHook(() => useAgents(onNotify))
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    act(() => fire({ agentId: '1234', type: 'failed', data: { error: 'boom' } }))
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith('failed', 'boom'))
+  })
+
+  it('calls onNotify("input") when a log chunk matches input prompt pattern', async () => {
+    const { fire } = setupEventSource()
+    const onNotify = vi.fn()
+    const { result } = renderHook(() => useAgents(onNotify))
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    act(() => fire({ agentId: '1234', type: 'log', data: { message: 'Do you want to continue?' } }))
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith('input', 'Do you want to continue?'))
+  })
+
+  it('does not call onNotify("input") for normal log output', async () => {
+    const { fire } = setupEventSource()
+    const onNotify = vi.fn()
+    const { result } = renderHook(() => useAgents(onNotify))
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    act(() => fire({ agentId: '1234', type: 'log', data: { message: 'Writing file src/index.ts' } }))
+    await waitFor(() => expect(result.current.logs['1234']).toHaveLength(1))
+    expect(onNotify).not.toHaveBeenCalled()
+  })
+
+  it('createAgent sends Content-Type application/json header', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mkAgent()]) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mkAgent({ id: '5678', task: 'new' })) })
+    const { result } = renderHook(() => useAgents())
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    await act(async () => result.current.createAgent({ task: 'new' }))
+    const createCall = (global.fetch as any).mock.calls.find((c: any[]) => c[1]?.method === 'POST' && c[0] === '/api/agents')
+    expect(createCall[1].headers).toMatchObject({ 'Content-Type': 'application/json' })
+  })
+
+  it('createAgent throws when server returns an error', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([mkAgent()]) })
+      .mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ error: 'bad request' }) })
+    const { result } = renderHook(() => useAgents())
+    await waitFor(() => expect(result.current.agents).toHaveLength(1))
+    await expect(act(async () => result.current.createAgent({ task: '' }))).rejects.toThrow('bad request')
+  })
+})
+
+// ── looksLikeInputPrompt ───────────────────────────────────────────────────────
+
+describe('looksLikeInputPrompt', () => {
+  it.each([
+    'Do you want to continue?',
+    'Are you sure? ',
+    'Proceed [y/n]',
+    'Continue (y/n)',
+    'Confirm (yes/no)',
+    'Press Enter to continue',
+    '\x1B[32mOverwrite file? [Y/n]\x1B[0m',
+  ])('returns true for: %s', (input) => {
+    expect(looksLikeInputPrompt(input)).toBe(true)
+  })
+
+  it.each([
+    'Writing src/index.ts',
+    'Running npm install...',
+    'Done!',
+    '',
+    '\x1B[1m>> bypass permissions on\x1B[0m (shift+tab to cycle)',
+    'Installed 42 packages',
+  ])('returns false for: %s', (input) => {
+    expect(looksLikeInputPrompt(input)).toBe(false)
+  })
+
+  it('strips ANSI codes before matching', () => {
+    expect(looksLikeInputPrompt('\x1B[33mContinue?\x1B[0m')).toBe(true)
+  })
+
+  it('returns false for empty string', () => {
+    expect(looksLikeInputPrompt('')).toBe(false)
+  })
+
+  it('returns false for whitespace-only string', () => {
+    expect(looksLikeInputPrompt('   ')).toBe(false)
   })
 })

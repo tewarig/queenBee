@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAgents } from '@/hooks/use-agents'
+import { useNotifications } from '@/hooks/use-notifications'
+import { useSettings } from '@/hooks/use-settings'
 import { TerminalPane } from '@/components/TerminalPane'
 import type { Agent } from '@queenbee/core'
 
@@ -16,9 +18,25 @@ const STATUS_COLORS: Record<string, string> = {
 // ── Main shell ─────────────────────────────────────────────────────────────────
 
 export function AgentOrchestrator() {
-  const { agents, logs, loading, createAgent, startAgent, cancelAgent, sendRaw, refresh } = useAgents()
+  const { settings, update: updateSettings } = useSettings()
+  const { notify } = useNotifications(settings)
+  const { agents, logs, loading, createAgent, startAgent, cancelAgent, sendRaw, removeAgent, refresh } = useAgents(notify)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const settingsRef = useRef<HTMLDivElement>(null)
+
+  // Close settings panel on outside click
+  useEffect(() => {
+    if (!showSettings) return
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSettings])
 
   // Auto-select first agent; keep selection valid when agents update
   useEffect(() => {
@@ -41,9 +59,76 @@ export function AgentOrchestrator() {
     <div className="app-shell">
       {/* ── Tab bar ── */}
       <div className="tab-bar">
+        {/* Gear icon + settings popover */}
+        <div ref={settingsRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            className="icon-btn settings-btn"
+            onClick={() => setShowSettings(v => !v)}
+            aria-label="Settings"
+            title="Notification settings"
+            style={{ width: 38, height: 38, borderRight: '1px solid #2a2a2a', borderRadius: 0 }}
+          >
+            <GearIcon active={showSettings} />
+          </button>
+
+          {showSettings && (
+            <div className="settings-panel">
+              <div className="settings-title">Notification Audio</div>
+
+              <label className="settings-row settings-master">
+                <span className="settings-label">Enable audio</span>
+                <Toggle
+                  checked={settings.audioEnabled}
+                  onChange={v => updateSettings({ audioEnabled: v })}
+                />
+              </label>
+
+              <div className="settings-divider" />
+
+              <div className="settings-subtitle">Play sound for</div>
+
+              <label className={`settings-row${!settings.audioEnabled ? ' settings-disabled' : ''}`}>
+                <span className="settings-label">
+                  <span className="settings-dot" style={{ background: '#10b981' }} />
+                  Task completed
+                </span>
+                <Toggle
+                  checked={settings.playOnDone}
+                  disabled={!settings.audioEnabled}
+                  onChange={v => updateSettings({ playOnDone: v })}
+                />
+              </label>
+
+              <label className={`settings-row${!settings.audioEnabled ? ' settings-disabled' : ''}`}>
+                <span className="settings-label">
+                  <span className="settings-dot" style={{ background: '#ef4444' }} />
+                  Task failed
+                </span>
+                <Toggle
+                  checked={settings.playOnFailed}
+                  disabled={!settings.audioEnabled}
+                  onChange={v => updateSettings({ playOnFailed: v })}
+                />
+              </label>
+
+              <label className={`settings-row${!settings.audioEnabled ? ' settings-disabled' : ''}`}>
+                <span className="settings-label">
+                  <span className="settings-dot" style={{ background: '#f59e0b' }} />
+                  Input needed
+                </span>
+                <Toggle
+                  checked={settings.playOnInput}
+                  disabled={!settings.audioEnabled}
+                  onChange={v => updateSettings({ playOnInput: v })}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
         <div className="tabs" role="tablist">
           {agents.map(agent => (
-            <button
+            <div
               key={agent.id}
               role="tab"
               aria-selected={activeId === agent.id}
@@ -59,7 +144,15 @@ export function AgentOrchestrator() {
                 {agent.task.length > 22 ? agent.task.slice(0, 22) + '…' : agent.task}
               </span>
               {agent.status === 'running' && <span className="tab-pulse" />}
-            </button>
+              <button
+                className="tab-close"
+                onClick={e => { e.stopPropagation(); removeAgent(agent.id) }}
+                aria-label="Close agent"
+                title="Close and remove agent"
+              >
+                ✕
+              </button>
+            </div>
           ))}
 
           <button
@@ -87,6 +180,7 @@ export function AgentOrchestrator() {
             logs={logs[activeAgent.id] || []}
             onStart={() => startAgent(activeAgent.id)}
             onCancel={() => cancelAgent(activeAgent.id)}
+            onClose={() => removeAgent(activeAgent.id)}
             onSendRaw={(data) => sendRaw(activeAgent.id, data)}
           />
         ) : (
@@ -119,11 +213,12 @@ export function AgentOrchestrator() {
 
 // ── Agent view (full-page for the selected tab) ────────────────────────────────
 
-function AgentView({ agent, logs, onStart, onCancel, onSendRaw }: {
+function AgentView({ agent, logs, onStart, onCancel, onClose, onSendRaw }: {
   agent: Agent
   logs: string[]
   onStart: () => void
   onCancel: () => void
+  onClose: () => void
   onSendRaw: (data: string) => void
 }) {
   const running = agent.status === 'running'
@@ -305,6 +400,33 @@ function RefreshIcon() {
   )
 }
 
+function GearIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? '#3b82f6' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  )
+}
+
+function Toggle({ checked, disabled, onChange }: {
+  checked: boolean
+  disabled?: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`toggle${checked ? ' toggle-on' : ''}${disabled ? ' toggle-disabled' : ''}`}
+    >
+      <span className="toggle-thumb" />
+    </button>
+  )
+}
+
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 function AppStyles() {
@@ -341,7 +463,9 @@ function AppStyles() {
         border-bottom: 1px solid #2a2a2a;
         height: 38px;
         flex-shrink: 0;
-        overflow: hidden;
+        overflow: visible;
+        position: relative;
+        z-index: 10;
       }
       .tabs {
         display: flex;
@@ -357,7 +481,7 @@ function AppStyles() {
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 0 14px;
+        padding: 0 10px 0 14px;
         border: none;
         border-right: 1px solid #2a2a2a;
         background: transparent;
@@ -370,7 +494,29 @@ function AppStyles() {
         height: 100%;
         position: relative;
         transition: background 0.1s, color 0.1s;
+        user-select: none;
       }
+
+      .tab-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border: none;
+        border-radius: 3px;
+        background: transparent;
+        color: #4b5563;
+        font-size: 0.65rem;
+        cursor: pointer;
+        flex-shrink: 0;
+        padding: 0;
+        margin-left: 2px;
+        transition: background 0.1s, color 0.1s;
+        line-height: 1;
+      }
+      .tab-close:hover { background: #ef444433; color: #ef4444; }
+      .tab:hover .tab-close { color: #6b7280; }
       .tab:hover { background: #1e1e1e; color: #c0c0c0; }
       .tab-active {
         background: #1e1e1e;
@@ -415,6 +561,101 @@ function AppStyles() {
         transition: background 0.1s, color 0.1s;
       }
       .tab-add:hover { background: #1e1e1e; color: #e2e2e2; }
+
+      /* ── Settings panel ── */
+      .settings-btn { border-radius: 0 !important; }
+
+      .settings-panel {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 200;
+        background: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 10px;
+        padding: 12px 0 8px;
+        width: 230px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+      }
+
+      .settings-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #4b5563;
+        padding: 0 14px 8px;
+      }
+
+      .settings-subtitle {
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #374151;
+        padding: 4px 14px 6px;
+      }
+
+      .settings-divider {
+        height: 1px;
+        background: #2a2a2a;
+        margin: 4px 0 8px;
+      }
+
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 5px 14px;
+        cursor: pointer;
+        transition: background 0.1s;
+        gap: 8px;
+      }
+      .settings-row:hover { background: #222; }
+      .settings-master { padding-bottom: 8px; }
+      .settings-disabled { opacity: 0.4; pointer-events: none; }
+
+      .settings-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.78rem;
+        color: #c0c0c0;
+        user-select: none;
+      }
+      .settings-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      /* ── Toggle switch ── */
+      .toggle {
+        position: relative;
+        width: 32px;
+        height: 18px;
+        border: none;
+        border-radius: 99px;
+        background: #333;
+        cursor: pointer;
+        flex-shrink: 0;
+        padding: 0;
+        transition: background 0.2s;
+      }
+      .toggle-on { background: #3b82f6; }
+      .toggle-disabled { cursor: not-allowed; }
+      .toggle-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.2s;
+      }
+      .toggle-on .toggle-thumb { transform: translateX(14px); }
 
       .tab-bar-right {
         display: flex;
@@ -543,6 +784,8 @@ function AppStyles() {
       .action-btn:hover { opacity: 0.85; }
       .action-start  { background: #10b981; color: white; }
       .action-cancel { background: #ef4444; color: white; }
+      .action-close  { background: transparent; color: #6b7280; border: 1px solid #374151; }
+      .action-close:hover { background: #1f2937; color: #e2e2e2; border-color: #6b7280; }
 
       /* ── Task bar ── */
       .task-bar {

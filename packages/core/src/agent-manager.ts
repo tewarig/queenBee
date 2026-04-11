@@ -244,6 +244,7 @@ export class AgentManager extends EventEmitter {
       this.worktreeManagers.delete(id)
     }
 
+    this.logBuffers.delete(id)
     this.agents.delete(id)
   }
 
